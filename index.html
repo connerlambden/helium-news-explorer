@@ -100,7 +100,7 @@ footer a { color: var(--muted); }
 <body>
 <header>
   <h1><span class="balloon">🎈</span> Helium News Bias Explorer</h1>
-  <p>An interactive view of <b>216 news sources</b> scored across <b>37 bias dimensions</b> — fetched live from the <a href="https://heliumtrades.com/mcp-page/">Helium MCP server</a>. No signup, no key, no tracking. Pick a dimension and rank, or scatter any two dimensions against each other.</p>
+  <p>An interactive view of <b>216 news sources</b> scored across <b>37 bias dimensions</b> — fetched live from the <a href="https://heliumtrades.com/mcp-page/">Helium MCP server</a>. No signup, no key, no tracking. Three modes: <b>rank</b> sources on any dimension, <b>scatter</b> any two dimensions with live Pearson r, or <b>compare</b> two sources head-to-head on a radar chart.</p>
   <p style="font-size:12px;">Data is fetched fresh on every load via <code style="color:var(--accent2);font-size:11px;">heliumtrades.com/mcp_all_source_biases/</code> — a single CORS-open HTTPS GET. Source code: <a href="https://github.com/connerlambden/helium-news-explorer">github.com/connerlambden/helium-news-explorer</a>.</p>
   <nav style="margin-top:14px;display:flex;gap:6px;flex-wrap:wrap">
     <a href="./" style="padding:8px 14px;background:var(--accent);color:#061029;border:1px solid var(--accent);border-radius:8px;font-size:13px;font-weight:600">News bias explorer</a>
@@ -118,6 +118,7 @@ footer a { color: var(--muted); }
     <div class="toggle-group" id="modeGroup">
       <button class="active" data-mode="rank">Ranked bars</button>
       <button data-mode="scatter">Scatter</button>
+      <button data-mode="compare">Compare</button>
     </div>
 
     <div id="rankControls">
@@ -148,6 +149,18 @@ footer a { color: var(--muted); }
       <input type="number" id="minArticlesS" value="100" min="0" max="2000" />
 
       <div style="margin-top:12px; font-size:12px; color: var(--muted);" id="corrInfo">Pearson r = —</div>
+    </div>
+
+    <div id="compareControls" style="display:none">
+      <label>Source A <span id="legendA" style="display:inline-block;width:10px;height:10px;background:#7aa2ff;border-radius:50%;margin-left:6px"></span></label>
+      <select id="srcA"></select>
+
+      <label>Source B <span id="legendB" style="display:inline-block;width:10px;height:10px;background:#ffb86b;border-radius:50%;margin-left:6px"></span></label>
+      <select id="srcB"></select>
+
+      <div style="margin-top:10px;font-size:11px;color:var(--muted);line-height:1.5">
+        Radar overlays both sources on the 12 most-used dimensions. Each axis is normalized to its [min, max] across the corpus, so a longer spoke means a higher percentile.
+      </div>
     </div>
 
     <div class="share">
@@ -307,6 +320,99 @@ function renderScatter() {
   document.getElementById('chartHost').innerHTML = `<div class="scatter-host">${svg}</div>`;
 }
 
+function renderCompare() {
+  const a = document.getElementById('srcA').value;
+  const b = document.getElementById('srcB').value;
+  const srcA = SOURCES.find(s => s.source_name === a);
+  const srcB = SOURCES.find(s => s.source_name === b);
+  if (!srcA || !srcB) {
+    document.getElementById('chartHost').innerHTML = '<div class="loading">Pick two sources.</div>';
+    return;
+  }
+  document.getElementById('chartTitle').textContent = `Compare: ${a} vs ${b} on 12 most-used bias dimensions`;
+
+  const RADAR_DIMS = DIM_PRIORITY.slice(0, 12).filter(d => SOURCES.some(s => typeof getVal(s, d) === 'number'));
+
+  const ranges = {};
+  for (const d of RADAR_DIMS) {
+    const vals = SOURCES.map(s => getVal(s, d)).filter(v => typeof v === 'number');
+    ranges[d] = { min: Math.min(...vals, 0), max: Math.max(...vals, 0) };
+  }
+
+  const W = 700, H = 460, cx = W / 2, cy = H / 2 + 8, R = 170;
+  const n = RADAR_DIMS.length;
+  const angle = i => -Math.PI / 2 + (i * 2 * Math.PI) / n;
+
+  function norm(v, d) {
+    const { min, max } = ranges[d];
+    if (max === min) return 0;
+    return (v - min) / (max - min);
+  }
+  function point(idx, t) {
+    const a = angle(idx);
+    return { x: cx + Math.cos(a) * R * t, y: cy + Math.sin(a) * R * t };
+  }
+  function pathFor(src, color) {
+    const pts = RADAR_DIMS.map((d, i) => {
+      const v = getVal(src, d);
+      if (typeof v !== 'number') return null;
+      const t = Math.max(0, Math.min(1, norm(v, d)));
+      const p = point(i, t);
+      return `${p.x},${p.y}`;
+    }).filter(p => p);
+    return `<polygon points="${pts.join(' ')}" fill="${color}" fill-opacity="0.18" stroke="${color}" stroke-width="2" stroke-linejoin="round" />`;
+  }
+
+  const gridLevels = [0.25, 0.5, 0.75, 1.0];
+  const gridPolys = gridLevels.map(t => {
+    const pts = RADAR_DIMS.map((_, i) => {
+      const p = point(i, t);
+      return `${p.x},${p.y}`;
+    }).join(' ');
+    return `<polygon points="${pts}" fill="none" stroke="var(--border)" stroke-width="0.8" />`;
+  }).join('');
+
+  const spokes = RADAR_DIMS.map((d, i) => {
+    const p = point(i, 1);
+    const labelOffset = 14;
+    const a = angle(i);
+    const lx = cx + Math.cos(a) * (R + labelOffset);
+    const ly = cy + Math.sin(a) * (R + labelOffset);
+    const anchor = Math.abs(Math.cos(a)) < 0.2 ? 'middle' : (Math.cos(a) > 0 ? 'start' : 'end');
+    const short = d.replace(/ bias$/, '').replace(/ liberal conservative/, ' lib/cons');
+    return `<line x1="${cx}" y1="${cy}" x2="${p.x}" y2="${p.y}" stroke="var(--border)" stroke-width="0.6" />
+            <text x="${lx}" y="${ly}" fill="var(--muted)" font-size="10" text-anchor="${anchor}" dominant-baseline="middle">${escapeHtml(short)}</text>`;
+  }).join('');
+
+  const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+    ${gridPolys}
+    ${spokes}
+    ${pathFor(srcA, '#7aa2ff')}
+    ${pathFor(srcB, '#ffb86b')}
+    <circle cx="${cx}" cy="${cy}" r="2.5" fill="var(--muted)" />
+  </svg>`;
+
+  const table = `<table style="margin-top:18px;width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums">
+    <thead><tr style="border-bottom:1px solid var(--border)">
+      <th style="text-align:left;padding:6px;color:var(--muted);font-weight:600">Dimension</th>
+      <th style="text-align:right;padding:6px;color:#7aa2ff;font-weight:600">${escapeHtml(a)}</th>
+      <th style="text-align:right;padding:6px;color:#ffb86b;font-weight:600">${escapeHtml(b)}</th>
+      <th style="text-align:right;padding:6px;color:var(--muted);font-weight:600">Δ</th>
+    </tr></thead>
+    <tbody>${RADAR_DIMS.map(d => {
+      const va = getVal(srcA, d), vb = getVal(srcB, d);
+      const dv = (typeof va === 'number' && typeof vb === 'number') ? (va - vb).toFixed(2) : '—';
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px;color:var(--fg)">${escapeHtml(d)}</td>
+        <td style="text-align:right;padding:6px">${va ?? '—'}</td>
+        <td style="text-align:right;padding:6px">${vb ?? '—'}</td>
+        <td style="text-align:right;padding:6px;color:${Math.abs(parseFloat(dv)) > 0.5 ? 'var(--accent2)' : 'var(--muted)'}">${dv}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+
+  document.getElementById('chartHost').innerHTML = `<div class="scatter-host" style="height:auto">${svg}</div>${table}`;
+}
+
 function showDetail(name) {
   const src = SOURCES.find(s => s.source_name === name);
   if (!src) return;
@@ -341,14 +447,30 @@ function populateDims() {
   document.getElementById('dim').value = 'overall credibility';
   document.getElementById('dimX').value = 'liberal conservative bias';
   document.getElementById('dimY').value = 'fearful bias';
+
+  const named = SOURCES
+    .filter(s => s.source_name && (s.articles_analyzed || 0) >= 50)
+    .map(s => s.source_name).sort();
+  const opts = named.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+  const a = document.getElementById('srcA'), b = document.getElementById('srcB');
+  if (a) a.innerHTML = opts;
+  if (b) b.innerHTML = opts;
+  const defaultA = named.find(n => /fox news/i.test(n)) || named[0];
+  const defaultB = named.find(n => /msnbc/i.test(n)) || named[1];
+  if (a && defaultA) a.value = defaultA;
+  if (b && defaultB) b.value = defaultB;
 }
 
 function setMode(mode) {
   document.querySelectorAll('#modeGroup button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
   document.getElementById('rankControls').style.display = mode === 'rank' ? 'block' : 'none';
   document.getElementById('scatterControls').style.display = mode === 'scatter' ? 'block' : 'none';
+  const cc = document.getElementById('compareControls');
+  if (cc) cc.style.display = mode === 'compare' ? 'block' : 'none';
   document.getElementById('detailCard').classList.remove('active');
-  if (mode === 'rank') renderRank(); else renderScatter();
+  if (mode === 'rank') renderRank();
+  else if (mode === 'scatter') renderScatter();
+  else renderCompare();
 }
 
 function computeHeadline() {
@@ -379,6 +501,7 @@ async function init() {
     }));
     ['dim', 'topN', 'minArticles'].forEach(id => document.getElementById(id).addEventListener('input', renderRank));
     ['dimX', 'dimY', 'minArticlesS'].forEach(id => document.getElementById(id).addEventListener('input', renderScatter));
+    ['srcA', 'srcB'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('input', renderCompare); });
 
     document.getElementById('shareBtn').addEventListener('click', () => {
       const url = new URL(window.location.href);
