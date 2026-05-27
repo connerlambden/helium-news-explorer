@@ -489,6 +489,9 @@ function computeHeadline() {
 async function init() {
   try {
     const resp = await fetch(ENDPOINT, { cache: 'no-store' });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}${resp.status === 402 ? ' — daily API quota for your IP is exhausted. Try again in a few hours.' : ''}`);
+    }
     const data = await resp.json();
     SOURCES = data.sources || [];
     document.getElementById('srcCount').textContent = `${SOURCES.length} sources loaded`;
@@ -505,24 +508,43 @@ async function init() {
 
     document.getElementById('shareBtn').addEventListener('click', () => {
       const url = new URL(window.location.href);
-      url.searchParams.set('dim', document.getElementById('dim').value);
-      url.searchParams.set('topN', document.getElementById('topN').value);
-      url.searchParams.set('mode', document.querySelector('#modeGroup button.active').dataset.mode);
+      const mode = document.querySelector('#modeGroup button.active').dataset.mode;
+      ['dim','topN','dimX','dimY','srcA','srcB'].forEach(k => url.searchParams.delete(k));
+      url.searchParams.set('mode', mode);
+      if (mode === 'rank') {
+        url.searchParams.set('dim', document.getElementById('dim').value);
+        url.searchParams.set('topN', document.getElementById('topN').value);
+      } else if (mode === 'scatter') {
+        url.searchParams.set('dimX', document.getElementById('dimX').value);
+        url.searchParams.set('dimY', document.getElementById('dimY').value);
+      } else if (mode === 'compare') {
+        const a = document.getElementById('srcA'); const b = document.getElementById('srcB');
+        if (a) url.searchParams.set('srcA', a.value);
+        if (b) url.searchParams.set('srcB', b.value);
+      }
       navigator.clipboard.writeText(url.toString());
       document.getElementById('shareBtn').textContent = 'Copied!';
       setTimeout(() => document.getElementById('shareBtn').textContent = 'Copy view URL', 1400);
     });
 
-    // Restore from URL if present
     const params = new URLSearchParams(window.location.search);
     if (params.get('dim')) document.getElementById('dim').value = params.get('dim');
     if (params.get('topN')) document.getElementById('topN').value = params.get('topN');
+    if (params.get('dimX')) document.getElementById('dimX').value = params.get('dimX');
+    if (params.get('dimY')) document.getElementById('dimY').value = params.get('dimY');
+    if (params.get('srcA') && document.getElementById('srcA')) document.getElementById('srcA').value = params.get('srcA');
+    if (params.get('srcB') && document.getElementById('srcB')) document.getElementById('srcB').value = params.get('srcB');
     const mode = params.get('mode') || 'rank';
 
     computeHeadline();
     setMode(mode);
   } catch (e) {
-    document.getElementById('chartHost').innerHTML = `<div class="loading" style="color:var(--warn)">Failed to load: ${escapeHtml(e.message || String(e))}</div>`;
+    document.getElementById('chartHost').innerHTML = `<div class="loading" style="color:var(--warn);line-height:1.7">
+      <b>Could not load the bias corpus:</b> ${escapeHtml(e.message || String(e))}.<br><br>
+      The Helium REST API enforces a per-IP daily quota for unauthenticated calls. Reload tomorrow, or browse the
+      <a href="https://github.com/connerlambden/helium-mcp-cookbook">Python cookbook</a> or
+      <a href="./tickers.html">ticker forecast dashboard</a> in the meantime.
+    </div>`;
   }
 }
 
