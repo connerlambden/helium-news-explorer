@@ -117,8 +117,8 @@ footer a { color: var(--muted); }
 <body>
 <header>
   <h1><span class="balloon">📈</span> Helium Ticker Forecast Dashboard</h1>
-  <p>The top 10 short-volatility and long-volatility ticker candidates from the <a href="https://heliumtrades.com/mcp-page/">Helium MCP server</a>. Each card shows ML-driven 37-day price forecasts, an uncertainty cone, and the bullish &amp; bearish narratives produced by the same model. Free, no signup. Loads live data on every refresh.</p>
-  <p>Built on the <code>mcp_top_strategies/</code> REST endpoint — one CORS-open call returns everything below.</p>
+  <p>Top short- and long-volatility candidates from the <a href="https://heliumtrades.com/mcp-page/">Helium MCP server</a>. Each card: 37-day ML forecast, uncertainty cone, bull/bear narratives. Free, no signup.</p>
+  <p style="font-size:12px;">Live API first (<code>mcp_top_strategies/</code>); bundled snapshot if quota is exhausted.</p>
   <nav class="tabs">
     <a href="./">News bias explorer</a>
     <a href="./tickers.html" class="active">Ticker forecast dashboard</a>
@@ -133,7 +133,7 @@ footer a { color: var(--muted); }
     <p><b>Forecast %</b> is the ML model's central price-change estimate over the next 37 trading days. The <b>cone</b> shades the upper- and lower-bound percentages (the model's uncertainty band), widening with time. The <b>bull/bear narratives</b> are generated alongside the numbers — so the text and the number always agree on the same view of the world.</p>
     <p>Short-vol candidates have tight forecast bands → option premium-selling structures may be edge. Long-vol candidates have wide bands or asymmetric tails → option premium-buying structures may be edge. The model is wrong all the time; track its calibration with the <a href="https://github.com/connerlambden/helium-mcp-cookbook/blob/main/recipes/02_options_calibration_tracker.py">Brier-grade recipe</a>.</p>
     <div class="meta" id="meta">
-      <div>Source:&nbsp;<b>mcp_top_strategies/</b></div>
+      <div>Data:&nbsp;<b id="dataSource">—</b></div>
       <div>Loaded:&nbsp;<b id="loadedAt">—</b></div>
       <div>Sort:&nbsp;<b id="sortField">—</b></div>
     </div>
@@ -152,6 +152,7 @@ footer a { color: var(--muted); }
 
 <script>
 const ENDPOINT = "https://heliumtrades.com/mcp_top_strategies/";
+const FALLBACK = "./strategies.json";
 
 function stripHTML(s) {
   if (!s) return "";
@@ -258,36 +259,47 @@ function cardHTML(t, side) {
     </div>`;
 }
 
+async function loadStrategies() {
+  try {
+    const resp = await fetch(ENDPOINT, { cache: "no-store" });
+    if (resp.ok) return { ...(await resp.json()), live: true };
+  } catch (_) { /* bundled snapshot */ }
+  const resp = await fetch(FALLBACK, { cache: "no-store" });
+  if (!resp.ok) throw new Error("Live API unavailable and bundled snapshot failed to load.");
+  return { ...(await resp.json()), live: false };
+}
+
+function renderDashboard(data) {
+  const root = document.getElementById("content");
+  const short = data.short_volatility || [];
+  const longs = data.long_volatility || [];
+  document.getElementById("loadedAt").textContent = new Date().toLocaleString();
+  document.getElementById("sortField").textContent = data.sort || "helium_rank";
+  document.getElementById("dataSource").textContent = data.live
+    ? "Live API"
+    : `Snapshot${data.fetched_at ? ` · ${data.fetched_at}` : ""}`;
+  root.classList.remove("loading", "error");
+  root.innerHTML = `
+    <div class="columns">
+      <div class="column short">
+        <h2>Short-Volatility Candidates&nbsp;<b>(${short.length})</b></h2>
+        ${short.map(t => cardHTML(t, "short")).join("")}
+      </div>
+      <div class="column long">
+        <h2>Long-Volatility Candidates&nbsp;<b>(${longs.length})</b></h2>
+        ${longs.map(t => cardHTML(t, "long")).join("")}
+      </div>
+    </div>`;
+}
+
 async function load() {
   const root = document.getElementById("content");
   try {
-    const resp = await fetch(ENDPOINT, { cache: "no-store" });
-    if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status}${resp.status === 402 ? " — daily API quota for your IP is exhausted. Try again in a few hours." : ""}`);
-    }
-    const data = await resp.json();
-    const short = data.short_volatility || [];
-    const longs = data.long_volatility || [];
-
-    document.getElementById("loadedAt").textContent = new Date().toLocaleString();
-    document.getElementById("sortField").textContent = data.sort || "default";
-
-    root.classList.remove("loading");
-    root.innerHTML = `
-      <div class="columns">
-        <div class="column short">
-          <h2>Short-Volatility Candidates&nbsp;<b>(${short.length})</b></h2>
-          ${short.map(t => cardHTML(t, "short")).join("")}
-        </div>
-        <div class="column long">
-          <h2>Long-Volatility Candidates&nbsp;<b>(${longs.length})</b></h2>
-          ${longs.map(t => cardHTML(t, "long")).join("")}
-        </div>
-      </div>`;
+    renderDashboard(await loadStrategies());
   } catch (e) {
     root.classList.remove("loading");
     root.classList.add("error");
-    root.innerHTML = `Could not load forecasts: ${e.message}. <br><br>The Helium REST API enforces a per-IP daily quota for unauthenticated calls. Reload tomorrow, or browse the <a href="https://github.com/connerlambden/helium-mcp-cookbook">cookbook</a> in the meantime.`;
+    root.innerHTML = `Could not load forecasts: ${e.message}. Try the <a href="./">bias explorer</a> or <a href="https://github.com/connerlambden/helium-mcp-cookbook">cookbook</a>.`;
   }
 }
 

@@ -12,8 +12,9 @@ Two zero-dependency single-page apps for the [Helium MCP](https://heliumtrades.c
 ## What's here
 
 - `index.html` — News Bias Explorer (live API + `corpus.json` fallback)
-- `corpus.json` — bundled bias snapshot (~212 sources) for offline / quota-exhausted loads
-- `tickers.html` — Ticker Forecast Dashboard (calls `heliumtrades.com/mcp_top_strategies/`)
+- `corpus.json` — bundled bias snapshot (~212 sources)
+- `tickers.html` — Ticker Forecast Dashboard (live API + `strategies.json` fallback)
+- `strategies.json` — bundled top-strategies snapshot
 - Pure HTML + CSS + vanilla JS. No build step. No frameworks. No analytics.
 
 ## Why these exist
@@ -30,7 +31,7 @@ The Helium MCP server exposes a handful of free, anonymous, CORS-open JSON endpo
 
 ## Ticker Forecast Dashboard (`tickers.html`)
 
-- One call to `mcp_top_strategies/` returns 10 tickers (5 short-vol + 5 long-vol)
+- Tries live API on load; falls back to bundled `strategies.json` if quota is exhausted
 - Each card: ticker badge, current price, forecast %, uncertainty cone (SVG), bull case, bear case
 - The forecast and the narrative come from the same underlying model — they always agree on the same view of the world
 - Links to the full Helium analysis page for each ticker

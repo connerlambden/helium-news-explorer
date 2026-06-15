@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Helium News Bias Explorer — 216 sources, 37 dimensions, live</title>
-<meta name="description" content="An interactive explorer for the Helium MCP server's structured news-bias corpus. 216 sources scored on 37 dimensions. Free, no signup. Fetches live data on every load." />
+<title>Helium News Bias Explorer</title>
+<meta name="description" content="Rank, scatter, and compare news sources on 37 Helium bias dimensions. Live API with bundled fallback. Free, no signup." />
 <meta property="og:title" content="Helium News Bias Explorer" />
-<meta property="og:description" content="Rank 216 news sources on any of 37 bias dimensions. Live data from the Helium MCP server." />
+<meta property="og:description" content="Interactive news bias explorer — rank sources, scatter dimensions, compare outlets." />
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎈</text></svg>" />
 <style>
 :root {
@@ -100,8 +100,8 @@ footer a { color: var(--muted); }
 <body>
 <header>
   <h1><span class="balloon">🎈</span> Helium News Bias Explorer</h1>
-  <p>An interactive view of <b>216 news sources</b> scored across <b>37 bias dimensions</b> — fetched live from the <a href="https://heliumtrades.com/mcp-page/">Helium MCP server</a>. No signup, no key, no tracking. Three modes: <b>rank</b> sources on any dimension, <b>scatter</b> any two dimensions with live Pearson r, or <b>compare</b> two sources head-to-head on a radar chart.</p>
-  <p style="font-size:12px;">Tries the live API first (<code style="color:var(--accent2);font-size:11px;">heliumtrades.com/mcp_all_source_biases/</code>); falls back to a bundled snapshot if the free quota is exhausted. Source: <a href="https://github.com/connerlambden/helium-news-explorer">github.com/connerlambden/helium-news-explorer</a>.</p>
+  <p>Rank, scatter, and compare <b>news sources</b> on <b>37 bias dimensions</b> from the <a href="https://heliumtrades.com/mcp-page/">Helium MCP server</a>. No signup, no key. Three modes: ranked bars, scatter with Pearson r, and head-to-head radar compare.</p>
+  <p style="font-size:12px;">Live API first (<code style="color:var(--accent2);font-size:11px;">mcp_all_source_biases/</code>); bundled snapshot if the free quota is exhausted. <a href="https://github.com/connerlambden/helium-news-explorer">Source on GitHub</a>.</p>
   <nav style="margin-top:14px;display:flex;gap:6px;flex-wrap:wrap">
     <a href="./" style="padding:8px 14px;background:var(--accent);color:#061029;border:1px solid var(--accent);border-radius:8px;font-size:13px;font-weight:600">News bias explorer</a>
     <a href="./tickers.html" style="padding:8px 14px;background:var(--panel2);color:var(--fg);border:1px solid var(--border);border-radius:8px;font-size:13px">Ticker forecast dashboard</a>
@@ -185,7 +185,7 @@ footer a { color: var(--muted); }
 </div>
 
 <div class="headline" id="headline" style="display:none">
-  <h3>Headline finding from the live corpus</h3>
+  <h3 id="headlineTitle">Headline finding</h3>
   <p style="margin:0 0 10px;color:var(--muted);font-size:13px">Across <span id="hl-n">—</span> sources with ≥100 articles plus both fear and political scores:</p>
   <div class="nums">Fear-coded language vs <b>political direction</b> (left ↔ right) → Pearson r = <b id="hl-dir">—</b></div>
   <div class="nums">Fear-coded language vs <b>political extremism</b> (|L/C|, ignoring side) → Pearson r = <b id="hl-ext">—</b></div>
@@ -509,9 +509,11 @@ async function init() {
     document.getElementById('srcCount').textContent = `${SOURCES.length} sources loaded`;
     const ds = document.getElementById('dataSource');
     if (live) {
-      ds.textContent = 'Live from Helium API';
+      ds.textContent = 'Live API';
+      document.getElementById('headlineTitle').textContent = 'Headline finding (live corpus)';
     } else {
-      ds.innerHTML = `Bundled snapshot${fetched_at ? ` (${fetched_at})` : ''} — live API quota exhausted for this IP`;
+      ds.textContent = `Snapshot${fetched_at ? ` · ${fetched_at}` : ''}`;
+      document.getElementById('headlineTitle').textContent = 'Headline finding (bundled snapshot)';
     }
     populateDims();
 
