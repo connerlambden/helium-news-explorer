@@ -11,7 +11,8 @@ Two zero-dependency single-page apps for the [Helium MCP](https://heliumtrades.c
 
 ## What's here
 
-- `index.html` — News Bias Explorer (calls `heliumtrades.com/mcp_all_source_biases/`)
+- `index.html` — News Bias Explorer (live API + `corpus.json` fallback)
+- `corpus.json` — bundled bias snapshot (~212 sources) for offline / quota-exhausted loads
 - `tickers.html` — Ticker Forecast Dashboard (calls `heliumtrades.com/mcp_top_strategies/`)
 - Pure HTML + CSS + vanilla JS. No build step. No frameworks. No analytics.
 
@@ -21,7 +22,7 @@ The Helium MCP server exposes a handful of free, anonymous, CORS-open JSON endpo
 
 ## News Bias Explorer (`index.html`)
 
-- Fetches the full bias corpus on load
+- Tries the live API on load; falls back to bundled `corpus.json` if the free per-IP quota is exhausted
 - Rank sources by any of 37 dimensions in a bar chart
 - Scatter-plot any two dimensions against each other with live Pearson r
 - Click any source for its full 37-dimension profile
