@@ -53,6 +53,7 @@ That's it.
 
 - [helium-mcp-cookbook](https://github.com/connerlambden/helium-mcp-cookbook) — seven runnable Python recipes for the same REST surface
 - [helium-mcp](https://github.com/connerlambden/helium-mcp) — the MCP server itself
+- [BGPT MCP](https://github.com/connerlambden/bgpt-mcp) — scientific paper search with structured full-text evidence ([docs](https://bgpt.pro/mcp/))
 - [Fear-coding finding writeup](https://dev.to/connerlambden/fear-coding-in-160-news-sources-correlates-085-with-political-extremism-and-only-008-with-45n2) — the empirical analysis the bias explorer was built around
 - [Brier-grade your forecasts](https://dev.to/connerlambden/how-to-brier-grade-your-own-ml-option-pricing-forecasts-in-40-lines-of-python-1eii) — the calibration recipe that justifies trusting (or distrusting) the ticker dashboard's numbers
 
